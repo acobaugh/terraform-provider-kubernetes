@@ -27,6 +27,11 @@ func resourceKubernetesPersistentVolume() *schema.Resource {
 		},
 
 		CustomizeDiff: func(diff *schema.ResourceDiff, meta interface{}) error {
+			if diff.Id() == "" {
+				// We only care about updates, not creation
+				return nil
+			}
+
 			// Mutation of PersistentVolumeSource after creation is no longer allowed in 1.9+
 			// See https://github.com/kubernetes/kubernetes/blob/v1.9.3/CHANGELOG-1.9.md#storage-3
 			conn := meta.(*kubernetes.Clientset)
@@ -44,8 +49,10 @@ func resourceKubernetesPersistentVolume() *schema.Resource {
 			if k8sVersion.Equal(v1_9_0) || k8sVersion.GreaterThan(v1_9_0) {
 				if diff.HasChange("spec.0.persistent_volume_source") {
 					keys := diff.GetChangedKeys("spec.0.persistent_volume_source")
+					log.Printf("[DEBUG] Changed keys: %+v", keys)
 					for _, key := range keys {
 						if diff.HasChange(key) {
+							log.Printf("[DEBUG] Forcing new key on PV: %q", key)
 							err := diff.ForceNew(key)
 							if err != nil {
 								return err
